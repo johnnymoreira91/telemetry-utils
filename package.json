@@ -1,0 +1,12 @@
+{
+  "name": "@flexicorp/telemetry-utils",
+  "version": "1.0.0",
+  "description": "lib telemetria",
+  "license": "ISC",
+  "author": "Johnny Moreira",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
