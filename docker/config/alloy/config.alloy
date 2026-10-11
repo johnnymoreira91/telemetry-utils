@@ -4,7 +4,7 @@
 // Recebe OTLP (gRPC :4317 e HTTP :4318) para os TRES sinais
 // (traces, metrics, logs) e encaminha:
 //   traces  -> Tempo        (OTLP)
-//   metrics -> Prometheus   (remote_write)
+//   metrics -> Mimir        (remote_write)
 //   logs    -> Loki         (OTLP via otelcol -> loki)
 //
 // Observacao: a UI do Alloy sobe em :12345 (definido no docker-compose).
@@ -45,14 +45,14 @@ otelcol.exporter.otlp "tempo" {
   }
 }
 
-// --- Metrics -> Prometheus (remote_write) ----------------------------------
+// --- Metrics -> Mimir (remote_write) ---------------------------------------
 otelcol.exporter.prometheus "default" {
   forward_to = [prometheus.remote_write.default.receiver]
 }
 
 prometheus.remote_write "default" {
   endpoint {
-    url = "http://prometheus:9090/api/v1/write"
+    url = "http://mimir:9009/api/v1/push"
   }
 }
 

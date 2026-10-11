@@ -1,0 +1,66 @@
+# Grafana Mimir — TSDB para metricas (modo monolitico/single-binary).
+# Substitui o Prometheus: recebe via remote_write (/api/v1/push) e serve
+# PromQL compativel sob o prefixo /prometheus.
+#
+# Object storage: filesystem (blocos em disco local do container). Simples para
+# dev/POC e sem dependencia de S3/MinIO. Para producao, troque para backend s3.
+
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+  log_level: warn
+
+common:
+  storage:
+    backend: filesystem
+    filesystem:
+      dir: /data/storage
+
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/blocks
+  tsdb:
+    dir: /data/tsdb
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    kvstore:
+      store: memberlist
+
+distributor:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: memberlist
+
+ingester:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: memberlist
+    replication_factor: 1
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/ruler
+
+# Limites brandos para dev (evita rejeicao de amostras remote_write).
+limits:
+  ingestion_rate: 100000
+  ingestion_burst_size: 200000
+  max_global_series_per_user: 0
+  out_of_order_time_window: 1h
+
+usage_stats:
+  enabled: false

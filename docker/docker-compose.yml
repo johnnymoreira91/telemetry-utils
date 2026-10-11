@@ -3,9 +3,9 @@
 #
 # Fluxo:
 #   App --(OTLP HTTP/gRPC)--> Alloy --> Tempo (traces)
-#                                   --> Prometheus (metrics, via remote_write)
+#                                   --> Mimir (metrics, via remote_write)
 #                                   --> Loki (logs)
-#   Grafana consulta Tempo, Prometheus e Loki.
+#   Grafana consulta Tempo, Mimir e Loki.
 #
 # Rede: bridge dedicada "observability" com subnet 10.0.50.0/24 e IP fixo
 # por servico (facilita debug e evita colisao com outras bridges 172.x).
@@ -13,14 +13,14 @@
 #   alloy   : 10.0.50.10
 #   tempo   : 10.0.50.11
 #   loki    : 10.0.50.12
-#   prom.   : 10.0.50.13
+#   mimir   : 10.0.50.13
 #   grafana : 10.0.50.14
 #
 # Portas publicadas em 0.0.0.0 (acessiveis via localhost e pelo IP do host):
 #   Alloy  : 4317 (OTLP gRPC), 4318 (OTLP HTTP), 12345 (UI)
 #   Tempo  : 3200 (HTTP/query)
 #   Loki   : 3100 (HTTP/push + query)
-#   Prom.  : 9090 (UI/query)
+#   Mimir  : 9009 (push /api/v1/push + query PromQL em /prometheus)
 #   Grafana: 3001 (UI)   <- 3001 para nao colidir com a POC na 3000
 #
 # Suba manualmente:   docker compose up -d
@@ -45,7 +45,7 @@ services:
     depends_on:
       - tempo
       - loki
-      - prometheus
+      - mimir
     networks:
       observability:
         ipv4_address: 10.0.50.10
@@ -60,6 +60,8 @@ services:
       - tempo-data:/var/tempo
     ports:
       - "3200:3200"   # Tempo HTTP (query API)
+    depends_on:
+      - mimir
     networks:
       observability:
         ipv4_address: 10.0.50.11
@@ -79,19 +81,15 @@ services:
         ipv4_address: 10.0.50.12
     restart: unless-stopped
 
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    container_name: telemetry-prometheus
-    command:
-      - --config.file=/etc/prometheus/prometheus.yaml
-      - --web.enable-remote-write-receiver
-      - --enable-feature=exemplar-storage
-      - --storage.tsdb.path=/prometheus
+  mimir:
+    image: grafana/mimir:2.14.2
+    container_name: telemetry-mimir
+    command: ["-config.file=/etc/mimir/mimir.yaml", "-target=all"]
     volumes:
-      - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
-      - prometheus-data:/prometheus
+      - ./config/mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir-data:/data
     ports:
-      - "9090:9090"   # Prometheus UI
+      - "9009:9009"   # Mimir HTTP (remote_write + PromQL em /prometheus)
     networks:
       observability:
         ipv4_address: 10.0.50.13
@@ -116,7 +114,7 @@ services:
     depends_on:
       - tempo
       - loki
-      - prometheus
+      - mimir
     networks:
       observability:
         ipv4_address: 10.0.50.14
@@ -126,7 +124,7 @@ volumes:
   alloy-data:
   tempo-data:
   loki-data:
-  prometheus-data:
+  mimir-data:
   grafana-data:
 
 networks:
