@@ -1,0 +1,140 @@
+# ---------------------------------------------------------------------------
+# Stack de observabilidade para @flexicorp/telemetry-utils
+#
+# Fluxo:
+#   App --(OTLP HTTP/gRPC)--> Alloy --> Tempo (traces)
+#                                   --> Prometheus (metrics, via remote_write)
+#                                   --> Loki (logs)
+#   Grafana consulta Tempo, Prometheus e Loki.
+#
+# Rede: bridge dedicada "observability" com subnet 10.0.50.0/24 e IP fixo
+# por servico (facilita debug e evita colisao com outras bridges 172.x).
+#   gateway : 10.0.50.1
+#   alloy   : 10.0.50.10
+#   tempo   : 10.0.50.11
+#   loki    : 10.0.50.12
+#   prom.   : 10.0.50.13
+#   grafana : 10.0.50.14
+#
+# Portas publicadas em 0.0.0.0 (acessiveis via localhost e pelo IP do host):
+#   Alloy  : 4317 (OTLP gRPC), 4318 (OTLP HTTP), 12345 (UI)
+#   Tempo  : 3200 (HTTP/query)
+#   Loki   : 3100 (HTTP/push + query)
+#   Prom.  : 9090 (UI/query)
+#   Grafana: 3001 (UI)   <- 3001 para nao colidir com a POC na 3000
+#
+# Suba manualmente:   docker compose up -d
+# ---------------------------------------------------------------------------
+
+services:
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: telemetry-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "12345:12345" # UI do Alloy
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    networks:
+      observability:
+        ipv4_address: 10.0.50.10
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: telemetry-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./config/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo HTTP (query API)
+    networks:
+      observability:
+        ipv4_address: 10.0.50.11
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: telemetry-loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./config/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"   # Loki HTTP (push + query)
+    networks:
+      observability:
+        ipv4_address: 10.0.50.12
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: telemetry-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"   # Prometheus UI
+    networks:
+      observability:
+        ipv4_address: 10.0.50.13
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: telemetry-grafana
+    environment:
+      # Forca bind IPv4 (0.0.0.0) dentro do container.
+      - GF_SERVER_HTTP_ADDR=0.0.0.0
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"   # Grafana UI (host 3001 -> container 3000)
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    networks:
+      observability:
+        ipv4_address: 10.0.50.14
+    restart: unless-stopped
+
+volumes:
+  alloy-data:
+  tempo-data:
+  loki-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  observability:
+    name: observability
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.50.0/24
+          gateway: 10.0.50.1
