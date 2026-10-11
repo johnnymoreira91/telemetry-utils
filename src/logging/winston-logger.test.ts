@@ -96,31 +96,42 @@ describe('WinstonLogger.styled', () => {
 });
 
 describe('WinstonLogger.formatPrint', () => {
-  it('produz saída estilizada com prefixo [stage-service], nível colorido e mensagem (R1.4)', () => {
+  it('produz saída estilizada com prefixo [service], PID, data BR, nível MAIÚSCULO e mensagem (R1.4)', () => {
     const format = WinstonLogger.formatPrint('prod');
     const line = runFormat(format, {
       level: 'info',
       service: 'orders',
-      timestamp: '2024-01-01T00:00:00.000Z',
+      pid: 12345,
+      timestamp: '2024-01-01T10:20:30.000Z',
       message: 'order created',
     });
 
-    const coloredInfo = WinstonLogger.styled('info', 'info');
-    expect(line).toBe(`[prod-orders] 2024-01-01T00:00:00.000Z ${coloredInfo} order created`);
+    // Prefixo [service] colorido (verde) — sem o stage no prefixo.
+    expect(line).toContain(WinstonLogger.styled('info', '[orders]'));
+    // PID presente.
+    expect(line).toContain('12345');
+    // Data no formato DD/MM/YYYY HH:mm:ss (a hora depende do fuso; valida padrão).
+    expect(line).toMatch(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/);
+    // Nível em MAIÚSCULAS, alinhado (padEnd 7) e colorido.
+    expect(line).toContain(WinstonLogger.styled('info', 'INFO   '));
+    // Mensagem ao final.
+    expect(line).toContain('order created');
   });
 
-  it('inclui o contexto em PascalCase quando presente (R1.4)', () => {
+  it('inclui o contexto em PascalCase (colorido) quando presente (R1.4)', () => {
     const format = WinstonLogger.formatPrint('dev');
     const line = runFormat(format, {
       level: 'warn',
       service: 'orders',
-      timestamp: 'T',
+      timestamp: '2024-01-01T00:00:00.000Z',
       message: 'slow query',
       context: 'order-service',
     });
 
-    expect(line).toContain('[dev-orders]');
-    expect(line).toContain('[OrderService]');
+    expect(line).toContain(WinstonLogger.styled('info', '[orders]'));
+    expect(line).toContain(WinstonLogger.styled('info', '[OrderService]'));
+    // Nível WARN em maiusculo e alinhado.
+    expect(line).toContain(WinstonLogger.styled('warn', 'WARN   '));
   });
 
   it('trunca o Correlation_Id nos últimos 7 caracteres quando possui mais de 7 (R1.4)', () => {
@@ -128,7 +139,7 @@ describe('WinstonLogger.formatPrint', () => {
     const line = runFormat(format, {
       level: 'info',
       service: 'orders',
-      timestamp: 'T',
+      timestamp: '2024-01-01T00:00:00.000Z',
       message: 'done',
       correlationId: 'abcdef1234567890', // 16 chars -> últimos 7 = '4567890'
     });
@@ -142,7 +153,7 @@ describe('WinstonLogger.formatPrint', () => {
     const line = runFormat(format, {
       level: 'info',
       service: 'orders',
-      timestamp: 'T',
+      timestamp: '2024-01-01T00:00:00.000Z',
       message: 'done',
       correlationId: 'abc123', // 6 chars -> integral
     });

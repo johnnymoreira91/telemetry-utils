@@ -229,27 +229,72 @@ export class WinstonLogger extends winston.Logger {
   });
 
   /**
-   * Formato winston de impressão estilizada no console (R1.4).
+   * Comprimento de coluna para alinhar o nível (maior rótulo é `verbose`,
+   * 7 caracteres). O nível é exibido em MAIÚSCULAS e preenchido à direita.
+   */
+  private static readonly LEVEL_COLUMN_WIDTH = 7;
+
+  /**
+   * Formata o timestamp no padrão `DD/MM/YYYY HH:mm:ss`.
    *
-   * Compõe uma linha com:
-   * - prefixo `[stage-service]` (service derivado do `defaultMeta`/`info.service`);
-   * - timestamp e nível (nível colorido conforme a tabela de cores);
-   * - contexto em PascalCase (quando presente);
+   * Aceita um timestamp ISO (ou qualquer valor parseável por `Date`); quando
+   * não parseável, retorna a string original. Timestamp ausente retorna vazio.
+   *
+   * @param raw Valor bruto de `info.timestamp`.
+   * @returns A data/hora formatada em pt-BR, ou a string original/vazia.
+   */
+  private static formatTimestamp(raw: unknown): string {
+    if (raw === undefined || raw === null || raw === '') {
+      return '';
+    }
+    const text = String(raw);
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) {
+      return text;
+    }
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const dd = pad(date.getDate());
+    const mm = pad(date.getMonth() + 1);
+    const yyyy = date.getFullYear();
+    const hh = pad(date.getHours());
+    const mi = pad(date.getMinutes());
+    const ss = pad(date.getSeconds());
+    return `${dd}/${mm}/${yyyy} ${hh}:${mi}:${ss}`;
+  }
+
+  /**
+   * Formato winston de impressão estilizada no console (R1.4), no estilo de
+   * referência (NestJS-like):
+   *
+   *   `[service] <pid>  - DD/MM/YYYY HH:mm:ss   NIVEL [Context] (correlationId) mensagem`
+   *
+   * - prefixo `[service]` colorido (service derivado do `defaultMeta`/`info.service`);
+   * - PID do processo (`info.pid` quando presente, senão `process.pid`);
+   * - data/hora no formato `DD/MM/YYYY HH:mm:ss`;
+   * - nível em MAIÚSCULAS, alinhado em coluna e colorido conforme a tabela de cores;
+   * - contexto em PascalCase (quando presente), colorido;
    * - Correlation_Id truncado nos últimos 7 caracteres quando possuir mais de 7,
    *   ou integral quando possuir 7 caracteres ou menos (R1.4);
    * - a mensagem (concatenada com dados adicionais quando houver).
    *
-   * @param stage Estágio da aplicação usado no prefixo `[stage-service]`.
+   * O parâmetro `stage` é mantido na assinatura por compatibilidade; o prefixo
+   * passou a usar apenas `[service]` conforme o formato de referência.
+   *
+   * @param stage Estágio da aplicação (mantido por compatibilidade de assinatura).
    * @returns Um `winston.Logform.Format` que produz a linha estilizada.
    */
   static formatPrint(stage: string): winston.Logform.Format {
+    void stage; // mantido por compatibilidade; o prefixo usa apenas [service].
     return winston.format.printf((info: winston.Logform.TransformableInfo) => {
       const level = String(info.level);
       const service = info.service === undefined ? '' : String(info.service);
-      const timestamp = info.timestamp === undefined ? '' : String(info.timestamp);
       const message = info.message === undefined ? '' : String(info.message);
 
-      const prefix = `[${stage}-${service}]`;
+      const pid = info.pid === undefined || info.pid === null ? process.pid : info.pid;
+      const timestamp = WinstonLogger.formatTimestamp(info.timestamp);
+
+      // Prefixo [service] colorido (verde, como no formato de referência).
+      const prefix = WinstonLogger.styled('info', `[${service}]`);
 
       const context = WinstonLogger.parsePascalCase(
         info.context === undefined ? undefined : String(info.context),
@@ -267,22 +312,20 @@ export class WinstonLogger extends winston.Logger {
             ? correlationId.slice(-7)
             : correlationId;
 
-      const coloredLevel = WinstonLogger.styled(level as keyof typeof logColors, level);
+      // Nível em MAIÚSCULAS, alinhado em coluna e colorido pela tabela.
+      const levelLabel = level.toUpperCase().padEnd(WinstonLogger.LEVEL_COLUMN_WIDTH, ' ');
+      const coloredLevel = WinstonLogger.styled(level as keyof typeof logColors, levelLabel);
 
-      const parts: string[] = [prefix];
-      if (timestamp) {
-        parts.push(timestamp);
-      }
-      parts.push(coloredLevel);
+      const parts: string[] = [prefix, String(pid), '-', timestamp, ' ', coloredLevel];
       if (context) {
-        parts.push(`[${context}]`);
+        parts.push(WinstonLogger.styled('info', `[${context}]`));
       }
       if (truncatedCorrelationId !== undefined) {
         parts.push(`(${truncatedCorrelationId})`);
       }
       parts.push(message);
 
-      return parts.join(' ');
+      return parts.filter((part) => part !== '').join(' ');
     });
   }
 
