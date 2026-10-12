@@ -1,6 +1,6 @@
 {
   "name": "@flexicorp/telemetry-utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Biblioteca de telemetria unificada (logs, metricas e tracing) para projetos da organizacao",
   "license": "ISC",
   "author": "Johnny Moreira",
@@ -56,7 +56,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flexicorp/telemetry-utils.git"
+    "url": "git+https://github.com/johnnymoreira91/telemetry-utils.git"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

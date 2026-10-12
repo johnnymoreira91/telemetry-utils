@@ -1,6 +1,6 @@
 import * as winston from 'winston';
 import LokiTransport from 'winston-loki';
-import { trace, context as otelContext } from '@opentelemetry/api';
+import { trace, context as otelContext, type Span } from '@opentelemetry/api';
 import { WinstonLogger } from './winston-logger';
 import { OpenTelemetryTransportV3 } from '@opentelemetry/winston-transport';
 
@@ -148,7 +148,7 @@ export class LoggerService extends WinstonLogger {
   /**
    * Executa uma função dentro de um Span do OpenTelemetry, gerando telemetria automática.
    */
-  async withTrace<T>(name: string, fn: (span: any) => Promise<T>): Promise<T> {
+  async withTrace<T>(name: string, fn: (span: Span) => Promise<T>): Promise<T> {
     const tracer = trace.getTracer(this.service || 'default-service');
 
     return tracer.startActiveSpan(name, async (span) => {
