@@ -106,7 +106,15 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
       // Auto-instrumentações de Node.js: Winston habilitado (R9.6) e HTTP
       // ignorando requisições de entrada destinadas a `/metrics` (R9.7).
       getNodeAutoInstrumentations({
-        '@opentelemetry/instrumentation-winston': { enabled: true },
+        // Winston instrumentado para INJETAR o trace context (traceId/spanId)
+        // nos registros (R9.6). O reenvio automatico de logs ao Collector e
+        // DESABILITADO (`disableLogSending: true`) porque o LoggerService ja
+        // anexa o OpenTelemetryTransportV3 explicitamente; sem isso, cada log
+        // seria exportado em DOBRO.
+        '@opentelemetry/instrumentation-winston': {
+          enabled: true,
+          disableLogSending: true,
+        },
         '@opentelemetry/instrumentation-http': {
           ignoreIncomingRequestHook: (request) => request.url === METRICS_ROUTE,
         },

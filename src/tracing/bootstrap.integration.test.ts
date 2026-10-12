@@ -113,7 +113,7 @@ interface CapturedNodeSdkConfig {
  * Winston e hook de ignore de requisições HTTP de entrada.
  */
 interface CapturedAutoInstrumentationsConfig {
-  '@opentelemetry/instrumentation-winston'?: { enabled?: boolean };
+  '@opentelemetry/instrumentation-winston'?: { enabled?: boolean; disableLogSending?: boolean };
   '@opentelemetry/instrumentation-http'?: {
     ignoreIncomingRequestHook?: (request: { url?: string }) => boolean;
   };
@@ -207,6 +207,9 @@ describe('Telemetry_Bootstrap — modo Kubernetes (KUBERNETES === "true")', () =
 
     // Winston habilitado (R9.6).
     expect(autoCfg['@opentelemetry/instrumentation-winston']?.enabled).toBe(true);
+    // Evita duplicacao: o reenvio de logs pela auto-instrumentacao do Winston
+    // fica desligado (o LoggerService ja anexa o OpenTelemetryTransportV3).
+    expect(autoCfg['@opentelemetry/instrumentation-winston']?.disableLogSending).toBe(true);
 
     // (R9.7) HTTP ignora requisições de entrada destinadas a `/metrics`.
     const ignoreHook = autoCfg['@opentelemetry/instrumentation-http']?.ignoreIncomingRequestHook;
