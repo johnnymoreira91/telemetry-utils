@@ -26,7 +26,8 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "0.81.0",
@@ -52,5 +53,13 @@
     "tsup": "8.5.1",
     "typescript": "5.9.3",
     "vitest": "5.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flexicorp/telemetry-utils.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
   }
 }

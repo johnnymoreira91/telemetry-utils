@@ -1,0 +1,58 @@
+# Publica o pacote no GitHub Packages ao criar uma tag `v*` (ex.: v1.0.0, v1.2.3).
+#
+# Fluxo:
+#   git tag v1.0.1 && git push origin v1.0.1   -> dispara este workflow
+#
+# Requisitos:
+#   - O scope do pacote (@flexicorp) deve bater com o owner do repo (flexicorp).
+#   - Usa o GITHUB_TOKEN automatico (nao precisa criar secret).
+
+name: Publish to GitHub Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (registry GitHub Packages)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@flexicorp'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verificar que a versao do package.json casa com a tag
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json: $PKG_VERSION | tag: $TAG_VERSION"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::A versao do package.json ($PKG_VERSION) nao corresponde a tag ($TAG_VERSION)."
+            exit 1
+          fi
+
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

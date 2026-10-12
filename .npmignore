@@ -1,0 +1,36 @@
+# O que NAO deve ir para o pacote publicado.
+# Observacao: o package.json ja usa "files": ["dist","README.md"] (allowlist);
+# este arquivo e uma defesa extra e documenta a intencao.
+
+# Fontes e testes
+src/
+tests/
+**/*.test.ts
+**/*.spec.ts
+**/*.property.test.ts
+
+# Configuracao de build/dev
+tsconfig.json
+tsup.config.mjs
+vitest.config.ts
+.nvmrc
+.editorconfig
+.eslintrc*
+.prettierrc*
+
+# Infra / stack local de observabilidade
+docker/
+.kiro/
+
+# CI e metadados de repo
+.github/
+.gitignore
+.npmignore
+
+# Lockfiles e caches
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+coverage/
+*.log
+.npmrc
