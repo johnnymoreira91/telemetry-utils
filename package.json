@@ -59,7 +59,7 @@
     "url": "git+https://github.com/flexicorp/telemetry-utils.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }

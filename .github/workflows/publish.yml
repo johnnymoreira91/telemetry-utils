@@ -1,22 +1,21 @@
-# Publica o pacote no GitHub Packages ao criar uma tag `v*` (ex.: v1.0.0, v1.2.3).
+# Publica o pacote no npm (registry oficial npmjs.org) ao criar uma tag `v*`.
 #
 # Fluxo:
 #   git tag v1.0.1 && git push origin v1.0.1   -> dispara este workflow
 #
-# Requisitos:
-#   - O scope do pacote (@flexicorp) deve bater com o owner do repo (flexicorp).
-#   - Usa o GITHUB_TOKEN automatico (nao precisa criar secret).
+# Pre-requisito (uma unica vez):
+#   - Criar um Automation token no npmjs.com (Access Tokens -> Generate New Token
+#     -> Automation) e adiciona-lo nos secrets do repo como NPM_TOKEN
+#     (Settings -> Secrets and variables -> Actions -> New repository secret).
+#   - A org/usuario @flexicorp deve existir no npmjs.com e sua conta ter
+#     permissao de publish nela.
 
-name: Publish to GitHub Packages
+name: Publish to npm
 
 on:
   push:
     tags:
       - 'v*'
-
-permissions:
-  contents: read
-  packages: write
 
 jobs:
   publish:
@@ -25,12 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (registry GitHub Packages)
+      - name: Setup Node.js (registry npm oficial)
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@flexicorp'
+          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Install dependencies
@@ -52,7 +50,7 @@ jobs:
             exit 1
           fi
 
-      - name: Publish
-        run: npm publish
+      - name: Publish (publico)
+        run: npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

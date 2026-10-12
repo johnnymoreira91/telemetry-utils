@@ -1,25 +1,24 @@
 # -----------------------------------------------------------------------------
-# Como consumir @flexicorp/telemetry-utils do GitHub Packages
+# @flexicorp/telemetry-utils — publicado no npm PUBLICO (registry.npmjs.org)
 # -----------------------------------------------------------------------------
-# 1. Copie este arquivo para `.npmrc` na raiz do projeto que vai USAR a lib:
-#        cp .npmrc.example .npmrc
 #
-# 2. Gere um Personal Access Token (classic) no GitHub com o escopo:
-#        read:packages
-#    (Settings -> Developer settings -> Personal access tokens -> Tokens (classic))
+# PARA INSTALAR (consumir a lib): NAO precisa de .npmrc nem token.
+# Como o pacote e publico no npm oficial, basta:
 #
-# 3. Substitua SEU_TOKEN_AQUI pelo token, OU use a variavel de ambiente
-#    ${GITHUB_TOKEN} (recomendado: nao deixe o token em texto no arquivo).
+#     npm install @flexicorp/telemetry-utils @opentelemetry/api
 #
-# IMPORTANTE: NAO commite o `.npmrc` com um token real. Ele ja esta no
-# .gitignore deste repo; faca o mesmo no projeto consumidor.
 # -----------------------------------------------------------------------------
-
-# Direciona o scope @flexicorp para o registry do GitHub Packages.
-@flexicorp:registry=https://npm.pkg.github.com
-
-# Autenticacao. Opcao A: token via variavel de ambiente (preferivel em CI).
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-
-# Opcao B: token fixo no arquivo (apenas local; nunca commitar).
-# //npm.pkg.github.com/:_authToken=SEU_TOKEN_AQUI
+# PARA PUBLICAR MANUALMENTE a partir da sua maquina (opcional; o CI ja faz
+# isso via tag). Autentique-se uma vez com:
+#
+#     npm login
+#
+# ...e publique:
+#
+#     npm publish --access public
+#
+# Alternativamente, usando um Automation token sem login interativo, copie
+# este arquivo para `.npmrc` e defina o token (NUNCA commite o .npmrc real):
+#
+#     //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+# -----------------------------------------------------------------------------
