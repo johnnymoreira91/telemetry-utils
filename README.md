@@ -2,7 +2,7 @@
 
 Biblioteca de telemetria unificada para projetos da organização: **logs** (Winston), **métricas** e **tracing** (OpenTelemetry), com correlação automática por requisição e exportação via OTLP HTTP para OTel Collector ou Grafana Alloy.
 
-- Logger estruturado com níveis customizados, cores e formato de console/JSON.
+- Logger estruturado (base `@engebras/lib-logger`) com níveis customizados, cores e console estilizado/JSON. Configurado por variáveis de ambiente.
 - Correlação de requisições via `AsyncLocalStorage` (`correlationId` / `keyId`).
 - Injeção automática de `traceId` / `spanId` nos logs quando há span ativo.
 - Métricas (counter, histogram, gauge) e spans sobre a API do OpenTelemetry.
@@ -62,12 +62,19 @@ Comportamento do bootstrap:
 - Configura o nível de diagnóstico do OpenTelemetry a partir de `OTEL_LOG_LEVEL` (default `WARN`).
 - **Só inicia o Node SDK quando `KUBERNETES === 'true'`.** Em qualquer outro valor, registra no console que a telemetria foi ignorada (modo local) e **não** inicia o SDK.
 - Registra handlers de `SIGTERM`/`SIGINT` para encerramento gracioso.
+- A auto-instrumentação do Winston fica apenas com a correlação de contexto
+  (`disableLogSending: true`); o envio dos logs é feito pelo transporte do
+  próprio `LoggerService`, evitando duplicação.
 
 ---
 
 ## Configuração por variáveis de ambiente
 
 Toda a configuração é resolvida a partir do ambiente, com defaults aplicados.
+
+> O `LoggerService` lê estas variáveis diretamente de `process.env`. O bootstrap
+> do SDK e os provedores de métricas/tracing usam as mesmas variáveis (via
+> `TelemetryConfig`).
 
 ### Identificação do serviço
 
@@ -81,7 +88,7 @@ Toda a configuração é resolvida a partir do ambiente, com defaults aplicados.
 
 | Variável | Default | Descrição |
 | --- | --- | --- |
-| `LOG_LEVEL` | `info` | Nível mínimo. Valores válidos abaixo. Valor inválido cai para `info` e loga um aviso. |
+| `LOG_LEVEL` | `info` | Nível mínimo de emissão. Valores válidos abaixo. |
 | `LOG_FORMAT` | `text` | `text` ou `message` → console estilizado; `json` → console JSON. |
 
 Níveis de log (prioridade crescente — emite quando `prioridade(registro) <= prioridade(LOG_LEVEL)`):
@@ -147,35 +154,60 @@ LOKI_HOST=http://loki.infra.svc.cluster.local:3100
 
 ## Logging — `LoggerService`
 
+O `LoggerService` lê a configuração diretamente das variáveis de ambiente
+(`LOG_LEVEL`, `LOG_FORMAT`, `APPLICATION_NAME`, `APP_STAGE`, `LOKI_TRANSPORT`,
+`LOKI_HOST`). Apenas o `context` é obrigatório.
+
 ```ts
 import { LoggerService } from '@flexicorp/telemetry-utils';
 
-// context é obrigatório; logLevel/stage/service são opcionais
-// (resolvidos das variáveis de ambiente quando omitidos).
 const logger = new LoggerService('OrdersController');
 
 logger.info('pedido criado', { orderId: 'abc-123' });
 logger.warn('estoque baixo');
 logger.error('falha ao processar pagamento', { code: 'E_PAYMENT' });
-logger.debug('payload recebido', payload);
+logger.debug('payload recebido');
 ```
 
 Assinatura do construtor:
 
 ```ts
 new LoggerService(
-  context: string,       // rótulo do módulo/controller
-  logLevel?: LogLevel,   // default: LOG_LEVEL
-  stage?: string,        // default: APP_STAGE
-  service?: string,      // default: APPLICATION_NAME
+  context: string,   // rótulo do módulo/controller (ex.: 'OrdersController')
+  logLevel?: string, // default: process.env.LOG_LEVEL (ou 'info')
+  stage?: string,    // default: process.env.APP_STAGE
+  service?: string,  // default: process.env.APPLICATION_NAME (ou 'unknown-service')
 )
 ```
 
-Métodos por nível disponíveis: `crit`, `alert`, `http`, `error`, `warn`, `info`, `debug`, `verbose`.
+Métodos por nível disponíveis: `crit`, `alert`, `http`, `error`, `warn`, `info`,
+`debug`, `verbose`.
 
-Cada registro sempre contém `timestamp`, `level`, `service` e `message`. Quando há escopo de `Namespace` ativo, inclui `correlationId`/`keyId`; quando há span ativo, inclui `traceId`/`spanId`.
+### Transports
 
-Um erro em qualquer transporte (ex.: Loki/OTLP indisponível) é logado no console de erro **sem derrubar o processo**.
+| Transport | Quando | O que envia |
+| --- | --- | --- |
+| Console | sempre | Console estilizado (`LOG_FORMAT` `text`/`message`) ou JSON (demais valores). |
+| OpenTelemetry (`OpenTelemetryTransportV3`) | sempre | Logs via OTLP (para o Collector/Alloy) quando o Node SDK está ativo. |
+| Loki (`winston-loki`) | `LOKI_TRANSPORT=true` | Push nativo ao Loki em `LOKI_HOST` (batching a cada 5s). |
+
+Cada registro inclui `timestamp`, `level`, `service` e `message`. Quando há
+escopo de `Namespace` ativo, inclui `correlationId`/`keyId`; quando há span
+ativo, inclui `traceId`/`spanId` (correlação automática).
+
+Formato do console estilizado (`LOG_FORMAT=text`):
+
+```
+[Stage-Service] <puid>  - DD/MM/YYYY HH:mm:ss  NIVEL (Context) mensagem
+```
+
+- `[Stage-Service]` em PascalCase (amarelo);
+- `<puid>`: últimos 7 caracteres do `correlationId` (ou do PID quando não há escopo);
+- nível colorido e alinhado; mensagem colorida conforme o nível;
+- em `crit`/`error`/`debug`, dados adicionais são anexados via `util.inspect`.
+
+Um erro em qualquer transporte (ex.: Loki/OTLP indisponível) é logado no console
+de erro **sem derrubar o processo**.
 
 ### `withTrace` — envolver uma operação em um span
 
@@ -186,8 +218,10 @@ const result = await logger.withTrace('processarPedido', async (span) => {
 });
 ```
 
-- Em sucesso: encerra o span e retorna o valor.
-- Em exceção: registra a exceção no span, marca status de erro, encerra o span e **repropaga** o erro.
+- Cria um span ativo nomeado e emite um log `Iniciando trace: <name>`.
+- Em sucesso: define o status do span como OK, encerra-o e retorna o valor.
+- Em exceção: registra a exceção no span (`recordException`), marca status de
+  erro, loga o erro, encerra o span e **repropaga** a exceção.
 
 ---
 

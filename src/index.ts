@@ -16,7 +16,7 @@
 // Logging — LoggerService (classe concreta) e tipos auxiliares de métrica/handle
 // expostos por seus respectivos módulos.
 export { LoggerService } from './logging/logger-service';
-export { WinstonLogger } from './logging/winston-logger';
+export { WinstonLogger, logColors } from './logging/winston-logger';
 
 // Namespace — classe nomeada e a instância default compartilhada (R8.5).
 export { Namespace } from './logging/namespace';
