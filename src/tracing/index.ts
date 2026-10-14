@@ -34,7 +34,13 @@ import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { detectResources, envDetector, resourceFromAttributes } from '@opentelemetry/resources';
+import {
+  ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
+  ATTR_SERVICE_NAME,
+  ATTR_SERVICE_NAMESPACE,
+  ATTR_SERVICE_VERSION,
+} from '@opentelemetry/semantic-conventions';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
@@ -68,27 +74,58 @@ const config = loadConfig();
 let sdk: NodeSDK | null = null;
 
 if (shouldStartSdk(process.env.KUBERNETES)) {
+  // Tenant é OBRIGATÓRIO para iniciar a telemetria: ele isola os dados por
+  // organização no backend de observabilidade (header `X-Scope-OrgID`). Sem um
+  // valor explícito via `OTEL_TENANT`, o bootstrap falha de forma rápida,
+  // preservando o estado não inicializado do SDK.
+  if (!process.env.OTEL_TENANT) {
+    throw new Error(
+      '[telemetry-utils] OTEL_TENANT e obrigatorio para iniciar a telemetria. ' +
+        'Defina a variavel de ambiente OTEL_TENANT com o identificador do tenant.',
+    );
+  }
+
   // 3. Exportadores OTLP HTTP independentes por sinal. Para traces e métricas, o
   //    Host/endpoint efetivo é selecionado conforme o Export_Target do sinal
   //    (R6.2, R6.3); logs utiliza diretamente o endpoint OTLP de logs (R9.4).
+  // Header de tenant propagado a todos os exportadores OTLP HTTP para
+  // isolamento multi-tenant no backend de observabilidade (`X-Scope-OrgID`).
+  const tenantHeaders = { 'X-Scope-OrgID': config.tenant };
+
   const traceExporter = new OTLPTraceExporter({
     url: resolveEffectiveEndpoint(config, 'traces'),
+    headers: tenantHeaders,
   });
 
   const logExporter = new OTLPLogExporter({
     url: config.otlpEndpoints.logs,
+    headers: tenantHeaders,
   });
 
   const metricExporter = new OTLPMetricExporter({
     url: resolveEffectiveEndpoint(config, 'metrics'),
+    headers: tenantHeaders,
   });
 
-  // Atributos de recurso a partir das variáveis de ambiente (R9.8).
-  const resource = resourceFromAttributes({
-    'service.name': config.applicationName,
-    service_namespace: config.serviceNamespace,
-    'deployment.environment': config.stage,
+  // Atributos de recurso do contrato, nomeados pela convenção semântica do
+  // OpenTelemetry (`service.name`, `service.namespace`, `service.version`,
+  // `deployment.environment.name`), mais o `tenant` da organização (R9.8).
+  //
+  // A BASE vem das envs próprias da lib (APPLICATION_NAME, SERVICE_NAMESPACE,
+  // APP_VERSION, APP_STAGE, OTEL_TENANT). Em seguida mesclamos o resultado do
+  // `envDetector`, que lê as envs PADRÃO do OpenTelemetry — `OTEL_SERVICE_NAME`
+  // e `OTEL_RESOURCE_ATTRIBUTES`. Como no `merge(other)` o `other` TEM
+  // PRECEDÊNCIA, o que vier dessas envs padrão (o contrato) sobrepõe os valores
+  // da lib quando definido; na ausência, prevalece o fallback da lib.
+  const baseResource = resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: config.applicationName,
+    [ATTR_SERVICE_NAMESPACE]: config.serviceNamespace,
+    [ATTR_SERVICE_VERSION]: config.serviceVersion,
+    [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: config.stage,
+    tenant: config.tenant,
   });
+
+  const resource = baseResource.merge(detectResources({ detectors: [envDetector] }));
 
   sdk = new NodeSDK({
     resource,

@@ -45,8 +45,22 @@ export interface TelemetryConfig {
   applicationName: string;
   /** APP_STAGE, default `unknown-stage` (R7.5). */
   stage: string;
-  /** SERVICE_NAMESPACE (R9.8). */
+  /** SERVICE_NAMESPACE -> atributo de recurso `service.namespace` (R9.8). */
   serviceNamespace: string;
+  /** APP_VERSION -> atributo de recurso `service.version`, default `0.0.0`. */
+  serviceVersion: string;
+  /**
+   * OTEL_TENANT. Identificador de tenant propagado como o header
+   * `X-Scope-OrgID` em cada exportador OTLP HTTP (traces, logs, metrics),
+   * permitindo o isolamento multi-tenant no backend de observabilidade (ex.:
+   * Grafana Mimir/Loki/Tempo). Também é exposto como atributo de recurso
+   * `tenant`.
+   *
+   * É OBRIGATÓRIO para iniciar o Node SDK: o bootstrap (`/tracing`) falha de
+   * forma rápida quando `OTEL_TENANT` está ausente em modo Kubernetes. Em modo
+   * local (SDK não iniciado) assume o valor placeholder `default`.
+   */
+  tenant: string;
   /** LOG_LEVEL, default `info` (R1.7, R1.8). */
   logLevel: LogLevel;
   /** LOG_FORMAT, default `text` (R1.9). */

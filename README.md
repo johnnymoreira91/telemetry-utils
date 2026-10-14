@@ -65,6 +65,12 @@ Comportamento do bootstrap:
 - A auto-instrumentação do Winston fica apenas com a correlação de contexto
   (`disableLogSending: true`); o envio dos logs é feito pelo transporte do
   próprio `LoggerService`, evitando duplicação.
+- Carrega as auto-instrumentações de Node (`@opentelemetry/auto-instrumentations-node`),
+  incluindo HTTP e os frameworks web (Express, NestJS, Koa, Connect, etc.) e
+  bancos (PostgreSQL, MySQL, MongoDB, Redis). Com a instrumentação de framework
+  ativa, o span HTTP de servidor é nomeado pela **rota** (ex.: `GET /pedidos/{id}`
+  via `http.route`), e não pela URL com o id — atendendo ao contrato. O nome
+  final do span depende da instrumentação do framework usado pelo serviço.
 
 ---
 
@@ -80,9 +86,27 @@ Toda a configuração é resolvida a partir do ambiente, com defaults aplicados.
 
 | Variável | Default | Descrição |
 | --- | --- | --- |
-| `APPLICATION_NAME` | `unknown-service` | Nome do serviço (`service.name`). |
-| `APP_STAGE` | `unknown-stage` | Estágio/ambiente (`deployment.environment`). |
-| `SERVICE_NAMESPACE` | `ecs` | Namespace do serviço (`service_namespace`). |
+| `APPLICATION_NAME` | `unknown-service` | Nome do serviço → atributo de recurso `service.name`. |
+| `SERVICE_NAMESPACE` | `ecs` | Namespace do serviço → atributo `service.namespace`. |
+| `APP_VERSION` | `0.0.0` | Versão do serviço → atributo `service.version`. |
+| `APP_STAGE` | `unknown-stage` | Estágio/ambiente → atributo `deployment.environment.name`. |
+| `OTEL_TENANT` | — (**obrigatória**) | Identificador do tenant. Propagado como header `X-Scope-OrgID` nos exportadores OTLP (traces/logs/metrics) e exposto como atributo de recurso `tenant`, isolando os dados por organização no backend (Grafana Mimir/Loki/Tempo). |
+
+Estes quatro atributos de recurso (`service.name`, `service.namespace`,
+`service.version`, `deployment.environment.name`) seguem a convenção semântica
+do OpenTelemetry e compõem a identificação exigida pelo contrato do MAD APM.
+
+> **Compatibilidade com as envs padrão do OpenTelemetry.** O bootstrap também
+> honra `OTEL_SERVICE_NAME` e `OTEL_RESOURCE_ATTRIBUTES` (lidas pelo
+> `envDetector` do SDK). Quando definidas, elas **têm precedência** sobre as
+> envs próprias da lib acima; na ausência, prevalece o valor da lib (fallback).
+> Assim, se o ambiente/contrato já injeta `OTEL_RESOURCE_ATTRIBUTES`, basta não
+> definir as envs próprias e os valores do contrato serão usados.
+
+> **`OTEL_TENANT` é obrigatória para iniciar o SDK.** Em modo Kubernetes
+> (`KUBERNETES=true`), o bootstrap (`/tracing`) lança erro e **não** inicia o
+> Node SDK se `OTEL_TENANT` não estiver definida. Em modo local o SDK não é
+> iniciado, então a variável não é exigida.
 
 ### Logs
 
@@ -139,8 +163,10 @@ Exemplo de `.env`:
 
 ```env
 APPLICATION_NAME=orders-service
-APP_STAGE=production
 SERVICE_NAMESPACE=commerce
+APP_VERSION=2.3.1
+APP_STAGE=production
+OTEL_TENANT=acme
 KUBERNETES=true
 
 LOG_LEVEL=info
@@ -273,6 +299,8 @@ const config: TelemetryConfig = {
   applicationName: process.env.APPLICATION_NAME ?? 'orders-service',
   stage: process.env.APP_STAGE ?? 'production',
   serviceNamespace: process.env.SERVICE_NAMESPACE ?? 'commerce',
+  serviceVersion: process.env.APP_VERSION ?? '2.3.1',
+  tenant: process.env.OTEL_TENANT ?? 'acme',
   logLevel: 'info',
   logFormat: 'json',
   lokiTransport: false,

@@ -154,6 +154,17 @@ const DEFAULT_STAGE = 'unknown-stage';
 /** SERVICE_NAMESPACE padrão sugerido pelo design (Data Models — R9.8). */
 const DEFAULT_SERVICE_NAMESPACE = 'ecs';
 
+/** APP_VERSION padrão aplicado em ausência da env -> atributo `service.version`. */
+const DEFAULT_SERVICE_VERSION = '0.0.0';
+
+/**
+ * Placeholder de `OTEL_TENANT` aplicado apenas em ausência da env. O tenant é
+ * OBRIGATÓRIO para iniciar o SDK (validado no bootstrap `/tracing`); este valor
+ * cobre somente o modo local, no qual o SDK não é iniciado e nenhum dado é
+ * exportado. Propagado como header `X-Scope-OrgID` quando o SDK está ativo.
+ */
+const DEFAULT_TENANT = 'default';
+
 /** LOKI_HOST padrão aplicado em ausência da env quando o transporte está ativo (R6.8). */
 const DEFAULT_LOKI_HOST = 'http://loki.infra.svc.cluster.local:3100';
 
@@ -233,7 +244,10 @@ function resolveExportTargetWithDefault(
  * Resolução por parâmetro:
  * - `APPLICATION_NAME` -> default `unknown-service` (R7.4).
  * - `APP_STAGE` -> default `unknown-stage` (R7.5).
- * - `SERVICE_NAMESPACE` -> default `ecs` (R9.8).
+ * - `SERVICE_NAMESPACE` -> default `ecs`; atributo `service.namespace` (R9.8).
+ * - `APP_VERSION` -> default `0.0.0`; atributo `service.version`.
+ * - `OTEL_TENANT` -> obrigatório no bootstrap; placeholder `default` em modo
+ *   local; propagado como header `X-Scope-OrgID`.
  * - `LOG_LEVEL` -> validação tolerante, default `info` (R1.7, R1.8).
  * - `LOG_FORMAT` -> validação tolerante, default `text` (R1.9).
  * - `LOKI_TRANSPORT` -> habilitado apenas quando igual a `true` (R6.6, R6.7).
@@ -253,6 +267,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TelemetryConfi
     applicationName: withDefault(env.APPLICATION_NAME, DEFAULT_APPLICATION_NAME),
     stage: withDefault(env.APP_STAGE, DEFAULT_STAGE),
     serviceNamespace: withDefault(env.SERVICE_NAMESPACE, DEFAULT_SERVICE_NAMESPACE),
+    serviceVersion: withDefault(env.APP_VERSION, DEFAULT_SERVICE_VERSION),
+    tenant: withDefault(env.OTEL_TENANT, DEFAULT_TENANT),
     logLevel: resolveLogLevel(env.LOG_LEVEL),
     logFormat: resolveLogFormat(env.LOG_FORMAT),
     lokiTransport: env.LOKI_TRANSPORT === 'true',

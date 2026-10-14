@@ -21,6 +21,8 @@ const NUM_RUNS = 100;
 // Defaults esperados conforme a tabela de design (Data Models — R7.3, R7.4, R7.5).
 const DEFAULT_APPLICATION_NAME = 'unknown-service';
 const DEFAULT_STAGE = 'unknown-stage';
+const DEFAULT_SERVICE_VERSION = '0.0.0';
+const DEFAULT_TENANT = 'default';
 const DEFAULT_OTLP_BASE = 'http://otel-collector.infra.svc.cluster.local:4318';
 const DEFAULT_OTLP_ENDPOINTS = {
   traces: `${DEFAULT_OTLP_BASE}/v1/traces`,
@@ -100,9 +102,31 @@ describe('Property 12: Aplicação de defaults de variáveis de ambiente', () =>
 
     expect(config.applicationName).toBe(DEFAULT_APPLICATION_NAME);
     expect(config.stage).toBe(DEFAULT_STAGE);
+    expect(config.serviceVersion).toBe(DEFAULT_SERVICE_VERSION);
+    expect(config.tenant).toBe(DEFAULT_TENANT);
     expect(config.otlpEndpoints.traces).toBe(DEFAULT_OTLP_ENDPOINTS.traces);
     expect(config.otlpEndpoints.logs).toBe(DEFAULT_OTLP_ENDPOINTS.logs);
     expect(config.otlpEndpoints.metrics).toBe(DEFAULT_OTLP_ENDPOINTS.metrics);
+  });
+
+  it('resolve OTEL_TENANT: default `default` quando ausente, preservando o valor quando presente', () => {
+    fc.assert(
+      fc.property(optionalValueArb, (tenant) => {
+        const config = loadConfig(buildEnv({ OTEL_TENANT: tenant }));
+        expect(config.tenant).toBe(tenant === undefined ? DEFAULT_TENANT : tenant);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('resolve APP_VERSION: default `0.0.0` quando ausente, preservando o valor quando presente', () => {
+    fc.assert(
+      fc.property(optionalValueArb, (version) => {
+        const config = loadConfig(buildEnv({ APP_VERSION: version }));
+        expect(config.serviceVersion).toBe(version === undefined ? DEFAULT_SERVICE_VERSION : version);
+      }),
+      { numRuns: NUM_RUNS },
+    );
   });
 
   it('preserva integralmente todos os valores fornecidos quando o ambiente está completo', () => {

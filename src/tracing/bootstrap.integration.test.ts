@@ -9,8 +9,9 @@
  *   Node_SDK e registra no console que a telemetria foi ignorada; o export
  *   default é `null` (R9.5).
  * - Modo Kubernetes (`KUBERNETES === 'true'`): o `NodeSDK` é construído com os
- *   atributos de recurso (`service.name`/`service_namespace`/
- *   `deployment.environment`) vindos do ambiente, o leitor periódico de
+ *   atributos de recurso (`service.name`/`service.namespace`/
+ *   `service.version`/`deployment.environment.name`) vindos do ambiente, o
+ *   leitor periódico de
  *   métricas usa intervalo de 60000ms, `start()` é invocado, as
  *   auto-instrumentações habilitam Winston e o HTTP ignora `/metrics`
  *   (R6.5, R7.6, R9.6, R9.7, R9.9, R9.11).
@@ -171,7 +172,13 @@ describe('Telemetry_Bootstrap — modo Kubernetes (KUBERNETES === "true")', () =
     process.env.KUBERNETES = 'true';
     process.env.APPLICATION_NAME = 'orders-service';
     process.env.SERVICE_NAMESPACE = 'commerce';
+    process.env.APP_VERSION = '2.3.1';
     process.env.APP_STAGE = 'production';
+    process.env.OTEL_TENANT = 'acme';
+    // Garante que as envs padrão do OTel não estejam presentes neste caso, para
+    // validar o fallback puro das envs próprias da lib.
+    delete process.env.OTEL_SERVICE_NAME;
+    delete process.env.OTEL_RESOURCE_ATTRIBUTES;
 
     const mod = await import('./index');
 
@@ -183,10 +190,14 @@ describe('Telemetry_Bootstrap — modo Kubernetes (KUBERNETES === "true")', () =
 
     const config = nodeSdkCtorArgs[0] as CapturedNodeSdkConfig;
 
-    // (R9.8) Atributos de recurso vindos do ambiente.
+    // (R9.8) Atributos de recurso do contrato, nomeados pela convenção
+    // semântica do OpenTelemetry, vindos das envs próprias da lib.
     expect(config.resource.attributes['service.name']).toBe('orders-service');
-    expect(config.resource.attributes.service_namespace).toBe('commerce');
-    expect(config.resource.attributes['deployment.environment']).toBe('production');
+    expect(config.resource.attributes['service.namespace']).toBe('commerce');
+    expect(config.resource.attributes['service.version']).toBe('2.3.1');
+    expect(config.resource.attributes['deployment.environment.name']).toBe('production');
+    // Tenant exposto como atributo de recurso a partir de OTEL_TENANT.
+    expect(config.resource.attributes.tenant).toBe('acme');
 
     // (R9.9) Leitor periódico de métricas com intervalo de 60000ms.
     expect(config.metricReaders).toHaveLength(1);
@@ -217,6 +228,51 @@ describe('Telemetry_Bootstrap — modo Kubernetes (KUBERNETES === "true")', () =
     expect(ignoreHook?.({ url: '/metrics' })).toBe(true);
     expect(ignoreHook?.({ url: '/orders' })).toBe(false);
   });
+
+  it('honra as envs padrão do OTel (OTEL_SERVICE_NAME/OTEL_RESOURCE_ATTRIBUTES) com precedência sobre as envs da lib', async () => {
+    process.env.KUBERNETES = 'true';
+    process.env.OTEL_TENANT = 'acme';
+    // Envs próprias da lib (devem ser SOBRESCRITAS pelas envs padrão do OTel).
+    process.env.APPLICATION_NAME = 'lib-service';
+    process.env.SERVICE_NAMESPACE = 'lib-ns';
+    process.env.APP_STAGE = 'lib-stage';
+    // Envs PADRÃO do contrato: têm precedência no merge.
+    process.env.OTEL_SERVICE_NAME = 'contract-service';
+    process.env.OTEL_RESOURCE_ATTRIBUTES =
+      'service.namespace=contract-ns,deployment.environment.name=contract-env,custom.key=xyz';
+
+    await import('./index');
+
+    const sdkConfig = nodeSdkCtorArgs[0] as CapturedNodeSdkConfig;
+    const resource = sdkConfig.resource as unknown as {
+      waitForAsyncAttributes?: () => Promise<void>;
+      attributes: Record<string, unknown>;
+    };
+    // O merge com o envDetector resolve atributos de forma assíncrona.
+    if (resource.waitForAsyncAttributes) {
+      await resource.waitForAsyncAttributes();
+    }
+
+    // As envs padrão do OTel sobrepõem os valores da lib.
+    expect(resource.attributes['service.name']).toBe('contract-service');
+    expect(resource.attributes['service.namespace']).toBe('contract-ns');
+    expect(resource.attributes['deployment.environment.name']).toBe('contract-env');
+    // Atributos extras do OTEL_RESOURCE_ATTRIBUTES também são incorporados.
+    expect(resource.attributes['custom.key']).toBe('xyz');
+    // O tenant (próprio da lib) permanece, pois não é definido pelas envs padrão.
+    expect(resource.attributes.tenant).toBe('acme');
+  });
+
+  it('falha de forma rápida quando OTEL_TENANT está ausente, sem iniciar o SDK', async () => {
+    process.env.KUBERNETES = 'true';
+    delete process.env.OTEL_TENANT;
+
+    await expect(import('./index')).rejects.toThrow(/OTEL_TENANT/);
+
+    // O fail-fast preserva o estado não inicializado: nenhum SDK construído/iniciado.
+    expect(nodeSdkCtorArgs).toHaveLength(0);
+    expect(nodeSdkStart).not.toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================
@@ -229,6 +285,8 @@ function makeConfig(applicationName: string): TelemetryConfig {
     applicationName,
     stage: 'test',
     serviceNamespace: 'ns',
+    serviceVersion: '0.0.0',
+    tenant: 'default',
     logLevel: 'info',
     logFormat: 'text',
     lokiTransport: false,
