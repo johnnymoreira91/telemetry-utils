@@ -33,7 +33,9 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import type { ExpressLayerType } from '@opentelemetry/instrumentation-express';
 import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
+import { awsEcsDetector } from '@opentelemetry/resource-detector-aws';
 import { detectResources, envDetector, resourceFromAttributes } from '@opentelemetry/resources';
 import {
   ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
@@ -125,7 +127,9 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
     tenant: config.tenant,
   });
 
-  const resource = baseResource.merge(detectResources({ detectors: [envDetector] }));
+  const resource = baseResource.merge(
+    detectResources({ detectors: [awsEcsDetector, envDetector] }),
+  );
 
   sdk = new NodeSDK({
     resource,
@@ -142,6 +146,10 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
     instrumentations: [
       // Auto-instrumentações de Node.js: Winston habilitado (R9.6) e HTTP
       // ignorando requisições de entrada destinadas a `/metrics` (R9.7).
+      // Além disso, desativa instrumentações concorrentes e camadas ruidosas:
+      // - Desativa Router para evitar duplicação com o Express.
+      // - No Express, ignora 'middleware' e 'router' para evitar N spans por requisição.
+      // - No Mongoose, ativa suppressInternalInstrumentation para evitar duplicação com MongoDB.
       getNodeAutoInstrumentations({
         // Winston instrumentado para INJETAR o trace context (traceId/spanId)
         // nos registros (R9.6). O reenvio automatico de logs ao Collector e
@@ -154,6 +162,15 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
         },
         '@opentelemetry/instrumentation-http': {
           ignoreIncomingRequestHook: (request) => request.url === METRICS_ROUTE,
+        },
+        '@opentelemetry/instrumentation-router': {
+          enabled: false,
+        },
+        '@opentelemetry/instrumentation-express': {
+          ignoreLayersType: ['middleware', 'router'] as ExpressLayerType[],
+        },
+        '@opentelemetry/instrumentation-mongoose': {
+          suppressInternalInstrumentation: true,
         },
       }),
       // Instrumentação de runtime do Node.js (R9.6).

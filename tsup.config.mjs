@@ -26,6 +26,7 @@ export default defineConfig({
     '@opentelemetry/sdk-metrics',
     '@opentelemetry/sdk-logs',
     '@opentelemetry/resources',
+    '@opentelemetry/resource-detector-aws',
     'dotenv',
   ],
 });

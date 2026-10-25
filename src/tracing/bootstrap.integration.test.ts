@@ -118,6 +118,9 @@ interface CapturedAutoInstrumentationsConfig {
   '@opentelemetry/instrumentation-http'?: {
     ignoreIncomingRequestHook?: (request: { url?: string }) => boolean;
   };
+  '@opentelemetry/instrumentation-router'?: { enabled?: boolean };
+  '@opentelemetry/instrumentation-express'?: { ignoreLayersType?: string[] };
+  '@opentelemetry/instrumentation-mongoose'?: { suppressInternalInstrumentation?: boolean };
 }
 
 /** Ambiente original, restaurado após cada teste. */
@@ -227,6 +230,20 @@ describe('Telemetry_Bootstrap — modo Kubernetes (KUBERNETES === "true")', () =
     expect(typeof ignoreHook).toBe('function');
     expect(ignoreHook?.({ url: '/metrics' })).toBe(true);
     expect(ignoreHook?.({ url: '/orders' })).toBe(false);
+
+    // Instrumentação do Router desativada para evitar duplicação com Express.
+    expect(autoCfg['@opentelemetry/instrumentation-router']?.enabled).toBe(false);
+
+    // Express ignora 'middleware' e 'router' para evitar N spans por requisição.
+    expect(autoCfg['@opentelemetry/instrumentation-express']?.ignoreLayersType).toEqual([
+      'middleware',
+      'router',
+    ]);
+
+    // Mongoose suprime instrumentação interna para evitar duplicação com MongoDB.
+    expect(
+      autoCfg['@opentelemetry/instrumentation-mongoose']?.suppressInternalInstrumentation,
+    ).toBe(true);
   });
 
   it('honra as envs padrão do OTel (OTEL_SERVICE_NAME/OTEL_RESOURCE_ATTRIBUTES) com precedência sobre as envs da lib', async () => {
