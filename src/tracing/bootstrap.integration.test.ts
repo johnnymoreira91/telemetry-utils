@@ -119,7 +119,7 @@ interface CapturedAutoInstrumentationsConfig {
     ignoreIncomingRequestHook?: (request: { url?: string }) => boolean;
   };
   '@opentelemetry/instrumentation-router'?: { enabled?: boolean };
-  '@opentelemetry/instrumentation-express'?: { ignoreLayersType?: string[] };
+  '@opentelemetry/instrumentation-express'?: { enabled?: boolean; ignoreLayersType?: string[] };
   '@opentelemetry/instrumentation-mongoose'?: { suppressInternalInstrumentation?: boolean };
 }
 
@@ -231,14 +231,9 @@ describe('Telemetry_Bootstrap — modo Kubernetes (KUBERNETES === "true")', () =
     expect(ignoreHook?.({ url: '/metrics' })).toBe(true);
     expect(ignoreHook?.({ url: '/orders' })).toBe(false);
 
-    // Instrumentação do Router desativada para evitar duplicação com Express.
+    // Instrumentação do Router e Express desativadas para evitar spans duplicados e corrupção de rotas.
     expect(autoCfg['@opentelemetry/instrumentation-router']?.enabled).toBe(false);
-
-    // Express ignora 'middleware' e 'router' para evitar N spans por requisição.
-    expect(autoCfg['@opentelemetry/instrumentation-express']?.ignoreLayersType).toEqual([
-      'middleware',
-      'router',
-    ]);
+    expect(autoCfg['@opentelemetry/instrumentation-express']?.enabled).toBe(false);
 
     // Mongoose suprime instrumentação interna para evitar duplicação com MongoDB.
     expect(

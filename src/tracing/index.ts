@@ -33,7 +33,6 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import type { ExpressLayerType } from '@opentelemetry/instrumentation-express';
 import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
 import { awsEcsDetector } from '@opentelemetry/resource-detector-aws';
 import { detectResources, envDetector, resourceFromAttributes } from '@opentelemetry/resources';
@@ -167,7 +166,7 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
           enabled: false,
         },
         '@opentelemetry/instrumentation-express': {
-          ignoreLayersType: ['middleware', 'router'] as ExpressLayerType[],
+          enabled: false,
         },
         '@opentelemetry/instrumentation-mongoose': {
           suppressInternalInstrumentation: true,
