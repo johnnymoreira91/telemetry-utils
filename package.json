@@ -1,6 +1,6 @@
 {
   "name": "@flexicorp/telemetry-utils",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Biblioteca de telemetria unificada (logs, metricas e tracing) para projetos da organizacao",
   "license": "ISC",
   "author": "Johnny Moreira",
