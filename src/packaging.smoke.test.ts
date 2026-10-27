@@ -46,6 +46,9 @@ describe('Empacotamento: artefato CJS raiz (dist/index.js)', () => {
     expect(typeof rootArtifact.Namespace).toBe('function');
     expect(typeof rootArtifact.MetricsProvider).toBe('function');
     expect(typeof rootArtifact.TracerProvider).toBe('function');
+    expect(typeof rootArtifact.TraceClass).toBe('function');
+    expect(typeof rootArtifact.Trace).toBe('function');
+    expect(typeof rootArtifact.log).toBe('function');
   });
 });
 

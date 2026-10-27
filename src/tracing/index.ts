@@ -82,7 +82,7 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
   if (!process.env.OTEL_TENANT) {
     throw new Error(
       '[telemetry-utils] OTEL_TENANT e obrigatorio para iniciar a telemetria. ' +
-        'Defina a variavel de ambiente OTEL_TENANT com o identificador do tenant.',
+      'Defina a variavel de ambiente OTEL_TENANT com o identificador do tenant.',
     );
   }
 
@@ -197,7 +197,7 @@ if (shouldStartSdk(process.env.KUBERNETES)) {
   // 5. Modo local: o SDK não é iniciado e a decisão é registrada no console (R9.5).
   console.log(
     '[telemetry-utils] Telemetria ignorada em modo local ' +
-      '(KUBERNETES !== "true"): o Node_SDK nao foi iniciado.',
+    '(KUBERNETES !== "true"): o Node_SDK nao foi iniciado.',
   );
 }
 

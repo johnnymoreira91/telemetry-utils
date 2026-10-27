@@ -29,6 +29,10 @@ export type { MetricHandle, MetricAttributes } from './metrics/metrics-provider'
 // Tracer_Provider — provedor de tracing (R5).
 export { TracerProvider } from './tracing/tracer-provider';
 
+// Tracing Decorators — @TraceClass para instrumentar classes inteiras (ex: @TraceClass('LOGIC')), @Trace e @log
+export { TraceClass, Trace, log } from './tracing/trace.decorator';
+export type { TraceClassOptions, TraceOptions } from './tracing/trace.decorator';
+
 // Tipos públicos compartilhados (R6, R7).
 export type {
   TelemetryConfig,
